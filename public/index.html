@@ -14,8 +14,7 @@
             signOut, 
             onAuthStateChanged, 
             sendEmailVerification, 
-            reload,
-            updateProfile
+            reload
         } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
         import { 
             getFirestore, 
@@ -23,7 +22,9 @@
             getDoc, 
             setDoc, 
             updateDoc, 
-            serverTimestamp 
+            serverTimestamp,
+            collection,
+            addDoc 
         } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -49,14 +50,16 @@
             onAuthStateChanged,
             sendEmailVerification,
             reload,
-            updateProfile,
             doc,
             getDoc,
             setDoc,
             updateDoc,
-            serverTimestamp
+            serverTimestamp,
+            collection,
+            addDoc
         };
         window.firebaseReady = true;
+        console.log('Firebase initialized successfully');
     </script>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -291,6 +294,10 @@
         .sync-indicator.syncing {
             background: #ffc107;
             animation: pulse 1s infinite;
+        }
+
+        .sync-indicator.error {
+            background: #dc3545;
         }
 
         @keyframes pulse {
@@ -616,7 +623,6 @@
         <div class="auth-container">
             <h2 id="auth-title">Login to Your Account</h2>
             
-            <!-- Error/Success Messages -->
             <div id="auth-message" class="hidden"></div>
             
             <form id="auth-form" class="auth-form">
@@ -653,7 +659,7 @@
                     ✅ I've Verified - Check Status
                 </button>
                 <button id="skip-verification" style="background: #ffc107; color: #333;">
-                    ⏭️ Skip for Now (Limited Access)
+                    ⏭️ Skip for Now
                 </button>
                 <button id="back-to-login" style="background: #6c757d;">
                     ← Back to Login
@@ -674,7 +680,6 @@
                 </div>
             </div>
             
-            <!-- Email verification reminder -->
             <div id="email-reminder" class="verification-info hidden" style="margin-bottom: 20px;">
                 <p><strong>⚠️ Please verify your email address to unlock all features!</strong></p>
                 <button id="verify-email-btn" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">
@@ -815,8 +820,10 @@
             }
 
             init() {
+                console.log('Initializing Finance Tracker...');
                 const checkFirebase = () => {
                     if (window.firebaseReady && window.firebaseAuth && window.firebaseDb) {
+                        console.log('Firebase is ready');
                         this.auth = window.firebaseAuth;
                         this.db = window.firebaseDb;
                         this.firebaseUtils = window.firebaseUtils;
@@ -826,7 +833,7 @@
                         this.setDefaultDate();
                         
                         this.firebaseUtils.onAuthStateChanged(this.auth, (user) => {
-                            console.log('Auth state changed:', user);
+                            console.log('Auth state changed:', user ? user.email : 'No user');
                             if (user) {
                                 this.currentUser = user;
                                 this.showMainApp();
@@ -837,6 +844,7 @@
                             }
                         });
                     } else {
+                        console.log('Waiting for Firebase...');
                         setTimeout(checkFirebase, 100);
                     }
                 };
@@ -887,9 +895,10 @@
             setupAutoBackup() {
                 setInterval(() => {
                     if (this.currentUser && this.transactions.length > 0) {
+                        console.log('Auto-saving to cloud...');
                         this.saveToCloud();
                     }
-                }, 5 * 60 * 1000);
+                }, 2 * 60 * 1000); // Every 2 minutes
             }
 
             showMessage(elementId, message, type = 'error') {
@@ -916,39 +925,26 @@
                 const email = document.getElementById('auth-email').value.trim();
                 const password = document.getElementById('auth-password').value;
 
-                // Clear previous messages
                 document.getElementById('auth-message').classList.add('hidden');
 
                 try {
                     if (this.isAuthMode === 'login') {
                         const userCredential = await this.firebaseUtils.signInWithEmailAndPassword(this.auth, email, password);
-                        console.log('Login successful:', userCredential.user);
-                        
-                        // Check if email is verified
-                        if (!userCredential.user.emailVerified) {
-                            console.log('Email not verified, showing verification modal');
-                            this.showVerificationModal(userCredential.user);
-                            return;
-                        }
-                        
+                        console.log('Login successful:', userCredential.user.email);
                         this.showNotification('Login successful!', 'success');
                     } else {
                         console.log('Creating new user...');
                         const userCredential = await this.firebaseUtils.createUserWithEmailAndPassword(this.auth, email, password);
-                        console.log('Account created:', userCredential.user);
+                        console.log('Account created:', userCredential.user.email);
                         
-                        // Send verification email immediately
                         try {
-                            await this.firebaseUtils.sendEmailVerification(userCredential.user, {
-                                url: window.location.href,
-                                handleCodeInApp: false
-                            });
+                            await this.firebaseUtils.sendEmailVerification(userCredential.user);
                             console.log('Verification email sent');
                             this.showVerificationModal(userCredential.user);
                             this.showNotification('Account created! Verification email sent.', 'info');
                         } catch (verifyError) {
                             console.error('Error sending verification email:', verifyError);
-                            this.showMessage('auth-message', 'Account created but failed to send verification email. You can resend it from your profile.', 'error');
+                            this.showMessage('auth-message', 'Account created but failed to send verification email.', 'error');
                         }
                     }
                 } catch (error) {
@@ -1009,11 +1005,8 @@
                 }
 
                 try {
-                    await this.firebaseUtils.sendEmailVerification(this.auth.currentUser, {
-                        url: window.location.href,
-                        handleCodeInApp: false
-                    });
-                    this.showMessage('verification-message', 'Verification email sent! Check your inbox and spam folder.', 'success');
+                    await this.firebaseUtils.sendEmailVerification(this.auth.currentUser);
+                    this.showMessage('verification-message', 'Verification email sent!', 'success');
                 } catch (error) {
                     console.error('Error resending verification:', error);
                     this.showMessage('verification-message', 'Failed to send verification email: ' + error.message, 'error');
@@ -1027,7 +1020,6 @@
                 }
 
                 try {
-                    // Reload user to get latest verification status
                     await this.firebaseUtils.reload(this.auth.currentUser);
                     
                     if (this.auth.currentUser.emailVerified) {
@@ -1038,7 +1030,7 @@
                         this.updateVerificationStatus();
                         this.showNotification('Email verified successfully!', 'success');
                     } else {
-                        this.showMessage('verification-message', 'Email not verified yet. Please check your inbox and click the verification link.', 'info');
+                        this.showMessage('verification-message', 'Email not verified yet. Please check your inbox.', 'info');
                     }
                 } catch (error) {
                     console.error('Error checking verification:', error);
@@ -1053,7 +1045,7 @@
                     this.showMainApp();
                     this.loadUserData();
                     this.updateVerificationStatus();
-                    this.showNotification('Logged in with limited access. Please verify your email.', 'info');
+                    this.showNotification('Logged in. Please verify your email when convenient.', 'info');
                 }
             }
 
@@ -1135,10 +1127,15 @@
             }
 
             async loadUserData() {
-                if (!this.currentUser) return;
+                if (!this.currentUser) {
+                    console.log('No current user, cannot load data');
+                    return;
+                }
 
                 try {
+                    console.log('Loading user data for:', this.currentUser.uid);
                     this.setSyncStatus('syncing');
+                    
                     const userDocRef = this.firebaseUtils.doc(this.db, 'users', this.currentUser.uid);
                     const userDoc = await this.firebaseUtils.getDoc(userDocRef);
                     
@@ -1147,15 +1144,15 @@
                         this.transactions = userData.transactions || [];
                         console.log('Loaded transactions:', this.transactions.length);
                     } else {
-                        // First time user, create document
                         console.log('Creating new user document');
                         await this.firebaseUtils.setDoc(userDocRef, {
                             email: this.currentUser.email,
                             transactions: [],
                             createdAt: this.firebaseUtils.serverTimestamp(),
-                            emailVerified: this.currentUser.emailVerified
+                            emailVerified: this.currentUser.emailVerified || false
                         });
                         this.transactions = [];
+                        console.log('New user document created');
                     }
                     
                     this.updateDashboard();
@@ -1171,36 +1168,44 @@
             }
 
             async saveToCloud() {
-                if (!this.currentUser) return;
+                if (!this.currentUser) {
+                    console.log('No current user, cannot save to cloud');
+                    return;
+                }
                 
                 try {
+                    console.log('Saving to cloud:', this.transactions.length, 'transactions');
                     this.setSyncStatus('syncing');
-                    const userDocRef = this.firebaseUtils.doc(this.db, 'users', this.currentUser.uid);
-                    await this.firebaseUtils.updateDoc(userDocRef, {
-                        transactions: this.transactions,
-                        lastUpdated: this.firebaseUtils.serverTimestamp(),
-                        emailVerified: this.currentUser.emailVerified
-                    });
-                    this.setSyncStatus('synced');
-                } catch (error) {
-                    console.error('Sync error:', error);
-                    this.setSyncStatus('error');
                     
-                    // Try to create the document if it doesn't exist
-                    if (error.code === 'not-found') {
-                        try {
-                            await this.firebaseUtils.setDoc(userDocRef, {
-                                email: this.currentUser.email,
-                                transactions: this.transactions,
-                                createdAt: this.firebaseUtils.serverTimestamp(),
-                                lastUpdated: this.firebaseUtils.serverTimestamp(),
-                                emailVerified: this.currentUser.emailVerified
-                            });
-                            this.setSyncStatus('synced');
-                        } catch (createError) {
-                            console.error('Error creating user document:', createError);
-                        }
+                    const userDocRef = this.firebaseUtils.doc(this.db, 'users', this.currentUser.uid);
+                    
+                    // Check if document exists first
+                    const userDoc = await this.firebaseUtils.getDoc(userDocRef);
+                    
+                    if (userDoc.exists()) {
+                        // Update existing document
+                        await this.firebaseUtils.updateDoc(userDocRef, {
+                            transactions: this.transactions,
+                            lastUpdated: this.firebaseUtils.serverTimestamp(),
+                            emailVerified: this.currentUser.emailVerified || false
+                        });
+                    } else {
+                        // Create new document
+                        await this.firebaseUtils.setDoc(userDocRef, {
+                            email: this.currentUser.email,
+                            transactions: this.transactions,
+                            createdAt: this.firebaseUtils.serverTimestamp(),
+                            lastUpdated: this.firebaseUtils.serverTimestamp(),
+                            emailVerified: this.currentUser.emailVerified || false
+                        });
                     }
+                    
+                    this.setSyncStatus('synced');
+                    console.log('Successfully saved to cloud');
+                } catch (error) {
+                    console.error('Error saving to cloud:', error);
+                    this.setSyncStatus('error');
+                    this.showNotification('Failed to sync data: ' + error.message, 'error');
                 }
             }
 
@@ -1214,15 +1219,15 @@
                 switch (status) {
                     case 'syncing':
                         indicator.classList.add('syncing');
-                        indicator.title = 'Syncing...';
+                        indicator.title = 'Syncing data...';
                         break;
                     case 'synced':
                         indicator.style.background = '#28a745';
-                        indicator.title = 'Data synced';
+                        indicator.title = 'Data synced successfully';
                         break;
                     case 'error':
-                        indicator.style.background = '#dc3545';
-                        indicator.title = 'Sync error';
+                        indicator.classList.add('error');
+                        indicator.title = 'Sync error - data may not be saved';
                         break;
                 }
             }
@@ -1236,39 +1241,76 @@
             async handleFormSubmit(e) {
                 e.preventDefault();
                 
+                if (!this.currentUser) {
+                    this.showNotification('Please log in to add transactions', 'error');
+                    return;
+                }
+                
                 const formData = {
-                    id: Date.now().toString(),
+                    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                     type: document.getElementById('transaction-type').value,
                     amount: parseFloat(document.getElementById('amount').value),
                     category: document.getElementById('category').value,
                     description: document.getElementById('description').value,
                     date: document.getElementById('date').value,
-                    createdAt: new Date().toISOString()
+                    createdAt: new Date().toISOString(),
+                    userId: this.currentUser.uid
                 };
 
+                console.log('Adding transaction:', formData);
                 await this.addTransaction(formData);
                 e.target.reset();
                 this.setDefaultDate();
             }
 
             async addTransaction(transaction) {
-                this.transactions.unshift(transaction);
-                await this.saveToCloud();
-                this.updateDashboard();
-                this.renderTransactions();
-                this.updateCharts();
-                
-                this.showNotification(`${transaction.type === 'income' ? 'Income' : 'Expense'} added successfully!`, 'success');
+                try {
+                    // Add to local array
+                    this.transactions.unshift(transaction);
+                    console.log('Added transaction locally, total:', this.transactions.length);
+                    
+                    // Update UI immediately
+                    this.updateDashboard();
+                    this.renderTransactions();
+                    this.updateCharts();
+                    
+                    // Save to cloud
+                    await this.saveToCloud();
+                    
+                    this.showNotification(`${transaction.type === 'income' ? 'Income' : 'Expense'} added successfully!`, 'success');
+                    console.log('Transaction added and saved to cloud');
+                } catch (error) {
+                    console.error('Error adding transaction:', error);
+                    // Remove from local array if cloud save failed
+                    this.transactions = this.transactions.filter(t => t.id !== transaction.id);
+                    this.updateDashboard();
+                    this.renderTransactions();
+                    this.updateCharts();
+                    this.showNotification('Failed to save transaction: ' + error.message, 'error');
+                }
             }
 
             async deleteTransaction(id) {
-                this.transactions = this.transactions.filter(t => t.id !== id);
-                await this.saveToCloud();
-                this.updateDashboard();
-                this.renderTransactions();
-                this.updateCharts();
-                
-                this.showNotification('Transaction deleted successfully!', 'success');
+                try {
+                    console.log('Deleting transaction:', id);
+                    this.transactions = this.transactions.filter(t => t.id !== id);
+                    
+                    // Update UI immediately
+                    this.updateDashboard();
+                    this.renderTransactions();
+                    this.updateCharts();
+                    
+                    // Save to cloud
+                    await this.saveToCloud();
+                    
+                    this.showNotification('Transaction deleted successfully!', 'success');
+                    console.log('Transaction deleted and saved to cloud');
+                } catch (error) {
+                    console.error('Error deleting transaction:', error);
+                    this.showNotification('Failed to delete transaction: ' + error.message, 'error');
+                    // Reload data to restore consistency
+                    this.loadUserData();
+                }
             }
 
             async manualBackup() {
@@ -1396,13 +1438,14 @@
                             if (lines[i].trim()) {
                                 const values = lines[i].split(',');
                                 transactions.push({
-                                    id: Date.now().toString() + i,
+                                    id: Date.now().toString() + i + Math.random().toString(36).substr(2, 9),
                                     date: values[0],
                                     type: values[1],
                                     category: values[2],
                                     description: values[3].replace(/"/g, ''),
                                     amount: parseFloat(values[4]),
-                                    createdAt: new Date().toISOString()
+                                    createdAt: new Date().toISOString(),
+                                    userId: this.currentUser.uid
                                 });
                             }
                         }

@@ -1,0 +1,1729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Finance Tracker - Enhanced</title>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { 
+            getAuth, 
+            signInWithEmailAndPassword, 
+            createUserWithEmailAndPassword, 
+            signOut, 
+            onAuthStateChanged, 
+            sendEmailVerification, 
+            reload,
+            updateProfile
+        } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            updateDoc, 
+            serverTimestamp 
+        } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBr2AGTqgLzv-1W9VvPX0AhJ-C9l3YP-7g",
+            authDomain: "personal-finance-tracker-80429.firebaseapp.com",
+            projectId: "personal-finance-tracker-80429",
+            storageBucket: "personal-finance-tracker-80429.firebasestorage.app",
+            messagingSenderId: "299119127681",
+            appId: "1:299119127681:web:ddeb11495b371f560ab180",
+            measurementId: "G-47CNG4CBGG"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.firebaseAuth = auth;
+        window.firebaseDb = db;
+        window.firebaseUtils = {
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword,
+            signOut,
+            onAuthStateChanged,
+            sendEmailVerification,
+            reload,
+            updateProfile,
+            doc,
+            getDoc,
+            setDoc,
+            updateDoc,
+            serverTimestamp
+        };
+        window.firebaseReady = true;
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .auth-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .auth-container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 450px;
+            width: 90%;
+        }
+
+        .auth-container h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .auth-form input {
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .auth-form button {
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .auth-form button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .auth-form button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .auth-toggle {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+        }
+
+        .auth-toggle a {
+            color: #667eea;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .success-message {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .verification-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-email {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .logout-btn, .backup-btn, .export-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn {
+            background: #dc3545;
+            color: white;
+        }
+
+        .backup-btn {
+            background: #28a745;
+            color: white;
+        }
+
+        .export-btn {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .header-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .stat-card h3 {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .stat-card p {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+
+        .sync-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+        }
+
+        .sync-indicator.syncing {
+            background: #ffc107;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .export-controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .export-controls select {
+            padding: 8px 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 6px;
+        }
+
+        .main-content {
+            display: grid;
+            gap: 30px;
+        }
+
+        .transaction-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .transaction-section h2 {
+            margin-bottom: 25px;
+            color: #333;
+            font-size: 1.8rem;
+        }
+
+        .transaction-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            grid-column: span 2;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .dashboard-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .chart-container h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .transactions-list-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .list-header h2 {
+            color: #333;
+            font-size: 1.8rem;
+        }
+
+        .filters {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filters select {
+            padding: 8px 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .transactions-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .transaction-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border: 2px solid #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .transaction-item:hover {
+            border-color: #667eea;
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .transaction-info h4 {
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .transaction-info p {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .transaction-amount {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .transaction-amount.income {
+            color: #28a745;
+        }
+
+        .transaction-amount.expense {
+            color: #dc3545;
+        }
+
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-left: 15px;
+            transition: background 0.3s ease;
+        }
+
+        .delete-btn:hover {
+            background: #c82333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .transaction-form {
+                grid-template-columns: 1fr;
+            }
+            
+            .btn-primary {
+                grid-column: span 1;
+            }
+            
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .list-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .filters {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header-stats {
+                grid-template-columns: 1fr;
+            }
+            
+            .transaction-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .transaction-amount,
+            .delete-btn {
+                margin-left: 0;
+            }
+            
+            .export-controls {
+                flex-direction: column;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            z-index: 1000;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+            max-width: 300px;
+        }
+
+        .notification.success {
+            background: #28a745;
+            color: white;
+        }
+
+        .notification.error {
+            background: #dc3545;
+            color: white;
+        }
+
+        .notification.info {
+            background: #17a2b8;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Authentication Modal -->
+    <div id="auth-modal" class="auth-modal">
+        <div class="auth-container">
+            <h2 id="auth-title">Login to Your Account</h2>
+            
+            <!-- Error/Success Messages -->
+            <div id="auth-message" class="hidden"></div>
+            
+            <form id="auth-form" class="auth-form">
+                <input type="email" id="auth-email" placeholder="Email Address" required>
+                <input type="password" id="auth-password" placeholder="Password (min 6 characters)" required minlength="6">
+                <button type="submit" id="auth-submit">Login</button>
+            </form>
+            <div class="auth-toggle">
+                Don't have an account? 
+                <a id="auth-toggle-link">Sign up</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Verification Modal -->
+    <div id="verification-modal" class="auth-modal hidden">
+        <div class="auth-container">
+            <h2>📧 Verify Your Email</h2>
+            
+            <div class="verification-info">
+                <p><strong>Verification email sent to:</strong></p>
+                <p id="verification-email"></p>
+                <br>
+                <p>Please check your inbox (and spam folder) and click the verification link.</p>
+            </div>
+            
+            <div id="verification-message" class="hidden"></div>
+            
+            <div class="auth-form">
+                <button id="resend-verification" style="background: #28a745;">
+                    📬 Resend Verification Email
+                </button>
+                <button id="check-verification">
+                    ✅ I've Verified - Check Status
+                </button>
+                <button id="skip-verification" style="background: #ffc107; color: #333;">
+                    ⏭️ Skip for Now (Limited Access)
+                </button>
+                <button id="back-to-login" style="background: #6c757d;">
+                    ← Back to Login
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app" class="container hidden">
+        <header class="header">
+            <div class="header-top">
+                <h1>💰 Personal Finance Tracker</h1>
+                <div class="user-info">
+                    <span id="user-email" class="user-email"></span>
+                    <span id="verification-status" style="margin-left: 10px;"></span>
+                    <button id="backup-btn" class="backup-btn">💾 Backup</button>
+                    <button id="logout-btn" class="logout-btn">Logout</button>
+                </div>
+            </div>
+            
+            <!-- Email verification reminder -->
+            <div id="email-reminder" class="verification-info hidden" style="margin-bottom: 20px;">
+                <p><strong>⚠️ Please verify your email address to unlock all features!</strong></p>
+                <button id="verify-email-btn" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">
+                    Send Verification Email
+                </button>
+            </div>
+            
+            <div class="export-controls">
+                <select id="export-format">
+                    <option value="json">JSON</option>
+                    <option value="csv">CSV</option>
+                    <option value="pdf">PDF Report</option>
+                </select>
+                <button id="export-btn" class="export-btn">📊 Export Data</button>
+                <input type="file" id="import-file" accept=".json,.csv" style="display: none;">
+                <button id="import-btn" class="backup-btn">📥 Import Data</button>
+            </div>
+            
+            <div class="header-stats">
+                <div class="stat-card">
+                    <div class="sync-indicator" id="sync-indicator"></div>
+                    <h3>Total Balance</h3>
+                    <p id="total-balance">$0.00</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Monthly Income</h3>
+                    <p id="monthly-income">$0.00</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Monthly Expenses</h3>
+                    <p id="monthly-expenses">$0.00</p>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section class="transaction-section">
+                <h2>Add Transaction</h2>
+                <form id="transaction-form" class="transaction-form">
+                    <div class="form-group">
+                        <label for="transaction-type">Type:</label>
+                        <select id="transaction-type" required>
+                            <option value="income">Income</option>
+                            <option value="expense">Expense</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="amount">Amount:</label>
+                        <input type="number" id="amount" step="0.01" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="category">Category:</label>
+                        <select id="category" required>
+                            <option value="salary">Salary</option>
+                            <option value="food">Food</option>
+                            <option value="transport">Transport</option>
+                            <option value="entertainment">Entertainment</option>
+                            <option value="bills">Bills</option>
+                            <option value="shopping">Shopping</option>
+                            <option value="healthcare">Healthcare</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">Description:</label>
+                        <input type="text" id="description" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="date">Date:</label>
+                        <input type="date" id="date" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Add Transaction</button>
+                </form>
+            </section>
+
+            <section class="dashboard-section">
+                <div class="dashboard-grid">
+                    <div class="chart-container">
+                        <h3>Spending by Category</h3>
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <h3>Monthly Trend</h3>
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section class="transactions-list-section">
+                <div class="list-header">
+                    <h2>Recent Transactions</h2>
+                    <div class="filters">
+                        <select id="filter-type">
+                            <option value="all">All Types</option>
+                            <option value="income">Income</option>
+                            <option value="expense">Expense</option>
+                        </select>
+                        <select id="filter-category">
+                            <option value="all">All Categories</option>
+                            <option value="salary">Salary</option>
+                            <option value="food">Food</option>
+                            <option value="transport">Transport</option>
+                            <option value="entertainment">Entertainment</option>
+                            <option value="bills">Bills</option>
+                            <option value="shopping">Shopping</option>
+                            <option value="healthcare">Healthcare</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="transactions-list" class="transactions-list">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        Loading transactions...
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        class EnhancedFinanceTracker {
+            constructor() {
+                this.transactions = [];
+                this.charts = {};
+                this.currentUser = null;
+                this.isAuthMode = 'login';
+                this.syncStatus = 'synced';
+                this.isLoading = false;
+                this.init();
+            }
+
+            init() {
+                const checkFirebase = () => {
+                    if (window.firebaseReady && window.firebaseAuth && window.firebaseDb) {
+                        this.auth = window.firebaseAuth;
+                        this.db = window.firebaseDb;
+                        this.firebaseUtils = window.firebaseUtils;
+                        this.setupAuthListeners();
+                        this.setupEventListeners();
+                        this.setupAutoBackup();
+                        this.setDefaultDate();
+                        
+                        this.firebaseUtils.onAuthStateChanged(this.auth, (user) => {
+                            console.log('Auth state changed:', user);
+                            if (user) {
+                                this.currentUser = user;
+                                this.showMainApp();
+                                this.loadUserData();
+                                this.updateVerificationStatus();
+                            } else {
+                                this.showAuthModal();
+                            }
+                        });
+                    } else {
+                        setTimeout(checkFirebase, 100);
+                    }
+                };
+                checkFirebase();
+            }
+
+            setupAuthListeners() {
+                const authForm = document.getElementById('auth-form');
+                const authToggle = document.getElementById('auth-toggle-link');
+                const logoutBtn = document.getElementById('logout-btn');
+                
+                // Verification listeners
+                const resendBtn = document.getElementById('resend-verification');
+                const checkBtn = document.getElementById('check-verification');
+                const skipBtn = document.getElementById('skip-verification');
+                const backBtn = document.getElementById('back-to-login');
+                const verifyEmailBtn = document.getElementById('verify-email-btn');
+
+                authForm.addEventListener('submit', (e) => this.handleAuth(e));
+                authToggle.addEventListener('click', () => this.toggleAuthMode());
+                logoutBtn.addEventListener('click', () => this.logout());
+                
+                resendBtn.addEventListener('click', () => this.resendVerification());
+                checkBtn.addEventListener('click', () => this.checkVerification());
+                skipBtn.addEventListener('click', () => this.skipVerification());
+                backBtn.addEventListener('click', () => this.showAuthModal());
+                verifyEmailBtn.addEventListener('click', () => this.sendVerificationFromMain());
+            }
+
+            setupEventListeners() {
+                const form = document.getElementById('transaction-form');
+                const typeFilter = document.getElementById('filter-type');
+                const categoryFilter = document.getElementById('filter-category');
+                const backupBtn = document.getElementById('backup-btn');
+                const exportBtn = document.getElementById('export-btn');
+                const importBtn = document.getElementById('import-btn');
+                const importFile = document.getElementById('import-file');
+
+                form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+                typeFilter.addEventListener('change', () => this.filterTransactions());
+                categoryFilter.addEventListener('change', () => this.filterTransactions());
+                backupBtn.addEventListener('click', () => this.manualBackup());
+                exportBtn.addEventListener('click', () => this.exportData());
+                importBtn.addEventListener('click', () => importFile.click());
+                importFile.addEventListener('change', (e) => this.importData(e));
+            }
+
+            setupAutoBackup() {
+                setInterval(() => {
+                    if (this.currentUser && this.transactions.length > 0) {
+                        this.saveToCloud();
+                    }
+                }, 5 * 60 * 1000);
+            }
+
+            showMessage(elementId, message, type = 'error') {
+                const messageEl = document.getElementById(elementId);
+                messageEl.className = `${type}-message`;
+                messageEl.textContent = message;
+                messageEl.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    messageEl.classList.add('hidden');
+                }, 5000);
+            }
+
+            async handleAuth(e) {
+                e.preventDefault();
+                if (this.isLoading) return;
+
+                this.isLoading = true;
+                const submitBtn = document.getElementById('auth-submit');
+                const originalText = submitBtn.textContent;
+                submitBtn.textContent = 'Loading...';
+                submitBtn.disabled = true;
+
+                const email = document.getElementById('auth-email').value.trim();
+                const password = document.getElementById('auth-password').value;
+
+                // Clear previous messages
+                document.getElementById('auth-message').classList.add('hidden');
+
+                try {
+                    if (this.isAuthMode === 'login') {
+                        const userCredential = await this.firebaseUtils.signInWithEmailAndPassword(this.auth, email, password);
+                        console.log('Login successful:', userCredential.user);
+                        
+                        // Check if email is verified
+                        if (!userCredential.user.emailVerified) {
+                            console.log('Email not verified, showing verification modal');
+                            this.showVerificationModal(userCredential.user);
+                            return;
+                        }
+                        
+                        this.showNotification('Login successful!', 'success');
+                    } else {
+                        console.log('Creating new user...');
+                        const userCredential = await this.firebaseUtils.createUserWithEmailAndPassword(this.auth, email, password);
+                        console.log('Account created:', userCredential.user);
+                        
+                        // Send verification email immediately
+                        try {
+                            await this.firebaseUtils.sendEmailVerification(userCredential.user, {
+                                url: window.location.href,
+                                handleCodeInApp: false
+                            });
+                            console.log('Verification email sent');
+                            this.showVerificationModal(userCredential.user);
+                            this.showNotification('Account created! Verification email sent.', 'info');
+                        } catch (verifyError) {
+                            console.error('Error sending verification email:', verifyError);
+                            this.showMessage('auth-message', 'Account created but failed to send verification email. You can resend it from your profile.', 'error');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Authentication error:', error);
+                    let errorMessage = 'Authentication failed. ';
+                    
+                    switch (error.code) {
+                        case 'auth/user-not-found':
+                            errorMessage += 'No account found with this email.';
+                            break;
+                        case 'auth/wrong-password':
+                            errorMessage += 'Incorrect password.';
+                            break;
+                        case 'auth/invalid-email':
+                            errorMessage += 'Invalid email address.';
+                            break;
+                        case 'auth/user-disabled':
+                            errorMessage += 'This account has been disabled.';
+                            break;
+                        case 'auth/email-already-in-use':
+                            errorMessage += 'Email already in use.';
+                            break;
+                        case 'auth/weak-password':
+                            errorMessage += 'Password should be at least 6 characters.';
+                            break;
+                        case 'auth/network-request-failed':
+                            errorMessage += 'Network error. Check your internet connection.';
+                            break;
+                        default:
+                            errorMessage += error.message;
+                    }
+                    
+                    this.showMessage('auth-message', errorMessage, 'error');
+                } finally {
+                    this.isLoading = false;
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                }
+            }
+
+            showVerificationModal(user) {
+                console.log('Showing verification modal for user:', user.email);
+                document.getElementById('auth-modal').classList.add('hidden');
+                document.getElementById('main-app').classList.add('hidden');
+                document.getElementById('verification-modal').classList.remove('hidden');
+                document.getElementById('verification-email').textContent = user.email;
+                document.getElementById('verification-message').classList.add('hidden');
+            }
+
+            hideVerificationModal() {
+                document.getElementById('verification-modal').classList.add('hidden');
+            }
+
+            async resendVerification() {
+                if (!this.auth.currentUser) {
+                    this.showMessage('verification-message', 'No user logged in', 'error');
+                    return;
+                }
+
+                try {
+                    await this.firebaseUtils.sendEmailVerification(this.auth.currentUser, {
+                        url: window.location.href,
+                        handleCodeInApp: false
+                    });
+                    this.showMessage('verification-message', 'Verification email sent! Check your inbox and spam folder.', 'success');
+                } catch (error) {
+                    console.error('Error resending verification:', error);
+                    this.showMessage('verification-message', 'Failed to send verification email: ' + error.message, 'error');
+                }
+            }
+
+            async checkVerification() {
+                if (!this.auth.currentUser) {
+                    this.showMessage('verification-message', 'No user logged in', 'error');
+                    return;
+                }
+
+                try {
+                    // Reload user to get latest verification status
+                    await this.firebaseUtils.reload(this.auth.currentUser);
+                    
+                    if (this.auth.currentUser.emailVerified) {
+                        this.hideVerificationModal();
+                        this.currentUser = this.auth.currentUser;
+                        this.showMainApp();
+                        this.loadUserData();
+                        this.updateVerificationStatus();
+                        this.showNotification('Email verified successfully!', 'success');
+                    } else {
+                        this.showMessage('verification-message', 'Email not verified yet. Please check your inbox and click the verification link.', 'info');
+                    }
+                } catch (error) {
+                    console.error('Error checking verification:', error);
+                    this.showMessage('verification-message', 'Error checking verification status: ' + error.message, 'error');
+                }
+            }
+
+            skipVerification() {
+                if (this.auth.currentUser) {
+                    this.hideVerificationModal();
+                    this.currentUser = this.auth.currentUser;
+                    this.showMainApp();
+                    this.loadUserData();
+                    this.updateVerificationStatus();
+                    this.showNotification('Logged in with limited access. Please verify your email.', 'info');
+                }
+            }
+
+            async sendVerificationFromMain() {
+                if (!this.auth.currentUser) return;
+
+                try {
+                    await this.firebaseUtils.sendEmailVerification(this.auth.currentUser);
+                    this.showNotification('Verification email sent!', 'success');
+                } catch (error) {
+                    this.showNotification('Failed to send verification email: ' + error.message, 'error');
+                }
+            }
+
+            updateVerificationStatus() {
+                const statusEl = document.getElementById('verification-status');
+                const reminderEl = document.getElementById('email-reminder');
+                
+                if (this.currentUser) {
+                    if (this.currentUser.emailVerified) {
+                        statusEl.textContent = '✅ Verified';
+                        statusEl.style.color = '#28a745';
+                        reminderEl.classList.add('hidden');
+                    } else {
+                        statusEl.textContent = '⚠️ Unverified';
+                        statusEl.style.color = '#ffc107';
+                        reminderEl.classList.remove('hidden');
+                    }
+                }
+            }
+
+            toggleAuthMode() {
+                this.isAuthMode = this.isAuthMode === 'login' ? 'signup' : 'login';
+                const title = document.getElementById('auth-title');
+                const submit = document.getElementById('auth-submit');
+                const toggle = document.getElementById('auth-toggle-link');
+
+                document.getElementById('auth-message').classList.add('hidden');
+
+                if (this.isAuthMode === 'login') {
+                    title.textContent = 'Login to Your Account';
+                    submit.textContent = 'Login';
+                    toggle.textContent = 'Sign up';
+                    toggle.previousSibling.textContent = "Don't have an account? ";
+                } else {
+                    title.textContent = 'Create New Account';
+                    submit.textContent = 'Sign Up';
+                    toggle.textContent = 'Login';
+                    toggle.previousSibling.textContent = "Already have an account? ";
+                }
+            }
+
+            async logout() {
+                try {
+                    await this.firebaseUtils.signOut(this.auth);
+                    this.transactions = [];
+                    this.currentUser = null;
+                    this.showNotification('Logged out successfully!', 'info');
+                } catch (error) {
+                    this.showNotification('Logout error: ' + error.message, 'error');
+                }
+            }
+
+            showAuthModal() {
+                document.getElementById('auth-modal').classList.remove('hidden');
+                document.getElementById('main-app').classList.add('hidden');
+                document.getElementById('verification-modal').classList.add('hidden');
+                document.getElementById('auth-message').classList.add('hidden');
+            }
+
+            showMainApp() {
+                document.getElementById('auth-modal').classList.add('hidden');
+                document.getElementById('main-app').classList.remove('hidden');
+                document.getElementById('verification-modal').classList.add('hidden');
+                
+                if (this.currentUser) {
+                    document.getElementById('user-email').textContent = this.currentUser.email;
+                }
+            }
+
+            async loadUserData() {
+                if (!this.currentUser) return;
+
+                try {
+                    this.setSyncStatus('syncing');
+                    const userDocRef = this.firebaseUtils.doc(this.db, 'users', this.currentUser.uid);
+                    const userDoc = await this.firebaseUtils.getDoc(userDocRef);
+                    
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        this.transactions = userData.transactions || [];
+                        console.log('Loaded transactions:', this.transactions.length);
+                    } else {
+                        // First time user, create document
+                        console.log('Creating new user document');
+                        await this.firebaseUtils.setDoc(userDocRef, {
+                            email: this.currentUser.email,
+                            transactions: [],
+                            createdAt: this.firebaseUtils.serverTimestamp(),
+                            emailVerified: this.currentUser.emailVerified
+                        });
+                        this.transactions = [];
+                    }
+                    
+                    this.updateDashboard();
+                    this.renderTransactions();
+                    this.initCharts();
+                    this.setSyncStatus('synced');
+                    console.log('User data loaded successfully');
+                } catch (error) {
+                    console.error('Error loading user data:', error);
+                    this.showNotification('Error loading data: ' + error.message, 'error');
+                    this.setSyncStatus('error');
+                }
+            }
+
+            async saveToCloud() {
+                if (!this.currentUser) return;
+                
+                try {
+                    this.setSyncStatus('syncing');
+                    const userDocRef = this.firebaseUtils.doc(this.db, 'users', this.currentUser.uid);
+                    await this.firebaseUtils.updateDoc(userDocRef, {
+                        transactions: this.transactions,
+                        lastUpdated: this.firebaseUtils.serverTimestamp(),
+                        emailVerified: this.currentUser.emailVerified
+                    });
+                    this.setSyncStatus('synced');
+                } catch (error) {
+                    console.error('Sync error:', error);
+                    this.setSyncStatus('error');
+                    
+                    // Try to create the document if it doesn't exist
+                    if (error.code === 'not-found') {
+                        try {
+                            await this.firebaseUtils.setDoc(userDocRef, {
+                                email: this.currentUser.email,
+                                transactions: this.transactions,
+                                createdAt: this.firebaseUtils.serverTimestamp(),
+                                lastUpdated: this.firebaseUtils.serverTimestamp(),
+                                emailVerified: this.currentUser.emailVerified
+                            });
+                            this.setSyncStatus('synced');
+                        } catch (createError) {
+                            console.error('Error creating user document:', createError);
+                        }
+                    }
+                }
+            }
+
+            setSyncStatus(status) {
+                this.syncStatus = status;
+                const indicator = document.getElementById('sync-indicator');
+                if (!indicator) return;
+                
+                indicator.className = 'sync-indicator';
+                
+                switch (status) {
+                    case 'syncing':
+                        indicator.classList.add('syncing');
+                        indicator.title = 'Syncing...';
+                        break;
+                    case 'synced':
+                        indicator.style.background = '#28a745';
+                        indicator.title = 'Data synced';
+                        break;
+                    case 'error':
+                        indicator.style.background = '#dc3545';
+                        indicator.title = 'Sync error';
+                        break;
+                }
+            }
+
+            setDefaultDate() {
+                const dateInput = document.getElementById('date');
+                const today = new Date().toISOString().split('T')[0];
+                dateInput.value = today;
+            }
+
+            async handleFormSubmit(e) {
+                e.preventDefault();
+                
+                const formData = {
+                    id: Date.now().toString(),
+                    type: document.getElementById('transaction-type').value,
+                    amount: parseFloat(document.getElementById('amount').value),
+                    category: document.getElementById('category').value,
+                    description: document.getElementById('description').value,
+                    date: document.getElementById('date').value,
+                    createdAt: new Date().toISOString()
+                };
+
+                await this.addTransaction(formData);
+                e.target.reset();
+                this.setDefaultDate();
+            }
+
+            async addTransaction(transaction) {
+                this.transactions.unshift(transaction);
+                await this.saveToCloud();
+                this.updateDashboard();
+                this.renderTransactions();
+                this.updateCharts();
+                
+                this.showNotification(`${transaction.type === 'income' ? 'Income' : 'Expense'} added successfully!`, 'success');
+            }
+
+            async deleteTransaction(id) {
+                this.transactions = this.transactions.filter(t => t.id !== id);
+                await this.saveToCloud();
+                this.updateDashboard();
+                this.renderTransactions();
+                this.updateCharts();
+                
+                this.showNotification('Transaction deleted successfully!', 'success');
+            }
+
+            async manualBackup() {
+                try {
+                    await this.saveToCloud();
+                    
+                    const backupData = {
+                        transactions: this.transactions,
+                        backupDate: new Date().toISOString(),
+                        userEmail: this.currentUser.email
+                    };
+                    
+                    this.downloadJSON(backupData, `finance-backup-${new Date().toISOString().split('T')[0]}.json`);
+                    this.showNotification('Backup completed successfully!', 'success');
+                } catch (error) {
+                    this.showNotification('Backup failed: ' + error.message, 'error');
+                }
+            }
+
+            exportData() {
+                const format = document.getElementById('export-format').value;
+                const timestamp = new Date().toISOString().split('T')[0];
+                
+                switch (format) {
+                    case 'json':
+                        this.exportJSON(timestamp);
+                        break;
+                    case 'csv':
+                        this.exportCSV(timestamp);
+                        break;
+                    case 'pdf':
+                        this.exportPDF(timestamp);
+                        break;
+                }
+            }
+
+            exportJSON(timestamp) {
+                const data = {
+                    exportDate: new Date().toISOString(),
+                    transactions: this.transactions,
+                    summary: this.getFinancialSummary()
+                };
+                this.downloadJSON(data, `finance-export-${timestamp}.json`);
+                this.showNotification('JSON export completed!', 'success');
+            }
+
+            exportCSV(timestamp) {
+                const headers = ['Date', 'Type', 'Category', 'Description', 'Amount'];
+                const csvContent = [
+                    headers.join(','),
+                    ...this.transactions.map(t => [
+                        t.date,
+                        t.type,
+                        t.category,
+                        `"${t.description}"`,
+                        t.amount
+                    ].join(','))
+                ].join('\n');
+
+                this.downloadFile(csvContent, `finance-export-${timestamp}.csv`, 'text/csv');
+                this.showNotification('CSV export completed!', 'success');
+            }
+
+            exportPDF(timestamp) {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                doc.setFontSize(20);
+                doc.text('Personal Finance Report', 20, 30);
+                
+                doc.setFontSize(12);
+                const summary = this.getFinancialSummary();
+                doc.text(`Report Generated: ${new Date().toLocaleDateString()}`, 20, 50);
+                doc.text(`Total Balance: $${summary.totalBalance.toFixed(2)}`, 20, 65);
+                doc.text(`Total Income: $${summary.totalIncome.toFixed(2)}`, 20, 80);
+                doc.text(`Total Expenses: $${summary.totalExpenses.toFixed(2)}`, 20, 95);
+                
+                doc.text('Recent Transactions:', 20, 120);
+                let yPos = 135;
+                
+                this.transactions.slice(0, 20).forEach((transaction, index) => {
+                    const line = `${transaction.date} | ${transaction.type.toUpperCase()} | ${transaction.category} | $${transaction.amount.toFixed(2)}`;
+                    doc.text(line, 20, yPos);
+                    yPos += 15;
+                    
+                    if (yPos > 270) {
+                        doc.addPage();
+                        yPos = 30;
+                    }
+                });
+                
+                doc.save(`finance-report-${timestamp}.pdf`);
+                this.showNotification('PDF report generated!', 'success');
+            }
+
+            async importData(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                try {
+                    const text = await file.text();
+                    let importedData;
+                    
+                    if (file.name.endsWith('.json')) {
+                        importedData = JSON.parse(text);
+                        const transactions = importedData.transactions || importedData;
+                        
+                        if (Array.isArray(transactions)) {
+                            const existingIds = new Set(this.transactions.map(t => t.id));
+                            const newTransactions = transactions.filter(t => !existingIds.has(t.id));
+                            
+                            this.transactions = [...newTransactions, ...this.transactions];
+                            await this.saveToCloud();
+                            this.updateDashboard();
+                            this.renderTransactions();
+                            this.updateCharts();
+                            
+                            this.showNotification(`Imported ${newTransactions.length} transactions!`, 'success');
+                        }
+                    } else if (file.name.endsWith('.csv')) {
+                        const lines = text.split('\n');
+                        const transactions = [];
+                        
+                        for (let i = 1; i < lines.length; i++) {
+                            if (lines[i].trim()) {
+                                const values = lines[i].split(',');
+                                transactions.push({
+                                    id: Date.now().toString() + i,
+                                    date: values[0],
+                                    type: values[1],
+                                    category: values[2],
+                                    description: values[3].replace(/"/g, ''),
+                                    amount: parseFloat(values[4]),
+                                    createdAt: new Date().toISOString()
+                                });
+                            }
+                        }
+                        
+                        this.transactions = [...transactions, ...this.transactions];
+                        await this.saveToCloud();
+                        this.updateDashboard();
+                        this.renderTransactions();
+                        this.updateCharts();
+                        
+                        this.showNotification(`Imported ${transactions.length} transactions from CSV!`, 'success');
+                    }
+                } catch (error) {
+                    this.showNotification('Import failed: ' + error.message, 'error');
+                }
+                
+                e.target.value = '';
+            }
+
+            getFinancialSummary() {
+                const totalIncome = this.transactions
+                    .filter(t => t.type === 'income')
+                    .reduce((sum, t) => sum + t.amount, 0);
+
+                const totalExpenses = this.transactions
+                    .filter(t => t.type === 'expense')
+                    .reduce((sum, t) => sum + t.amount, 0);
+
+                return {
+                    totalIncome,
+                    totalExpenses,
+                    totalBalance: totalIncome - totalExpenses,
+                    transactionCount: this.transactions.length
+                };
+            }
+
+            downloadJSON(data, filename) {
+                const json = JSON.stringify(data, null, 2);
+                this.downloadFile(json, filename, 'application/json');
+            }
+
+            downloadFile(content, filename, mimeType) {
+                const blob = new Blob([content], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            updateDashboard() {
+                const currentMonth = new Date().getMonth();
+                const currentYear = new Date().getFullYear();
+                
+                const monthlyTransactions = this.transactions.filter(t => {
+                    const transactionDate = new Date(t.date);
+                    return transactionDate.getMonth() === currentMonth && 
+                           transactionDate.getFullYear() === currentYear;
+                });
+
+                const totalIncome = this.transactions
+                    .filter(t => t.type === 'income')
+                    .reduce((sum, t) => sum + t.amount, 0);
+
+                const totalExpenses = this.transactions
+                    .filter(t => t.type === 'expense')
+                    .reduce((sum, t) => sum + t.amount, 0);
+
+                const monthlyIncome = monthlyTransactions
+                    .filter(t => t.type === 'income')
+                    .reduce((sum, t) => sum + t.amount, 0);
+
+                const monthlyExpenses = monthlyTransactions
+                    .filter(t => t.type === 'expense')
+                    .reduce((sum, t) => sum + t.amount, 0);
+
+                const totalBalance = totalIncome - totalExpenses;
+
+                document.getElementById('total-balance').textContent = this.formatCurrency(totalBalance);
+                document.getElementById('monthly-income').textContent = this.formatCurrency(monthlyIncome);
+                document.getElementById('monthly-expenses').textContent = this.formatCurrency(monthlyExpenses);
+
+                const balanceElement = document.getElementById('total-balance');
+                balanceElement.style.color = totalBalance >= 0 ? '#28a745' : '#dc3545';
+            }
+
+            renderTransactions(filteredTransactions = null) {
+                const transactionsList = document.getElementById('transactions-list');
+                const transactions = filteredTransactions || this.transactions;
+
+                if (transactions.length === 0) {
+                    transactionsList.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No transactions found. Add your first transaction above!</p>';
+                    return;
+                }
+
+                transactionsList.innerHTML = transactions.map(transaction => `
+                    <div class="transaction-item">
+                        <div class="transaction-info">
+                            <h4>${transaction.description}</h4>
+                            <p>${this.formatCategory(transaction.category)} • ${this.formatDate(transaction.date)}</p>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <span class="transaction-amount ${transaction.type}">
+                                ${transaction.type === 'income' ? '+' : '-'}${this.formatCurrency(transaction.amount)}
+                            </span>
+                            <button class="delete-btn" onclick="financeTracker.deleteTransaction('${transaction.id}')">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            filterTransactions() {
+                const typeFilter = document.getElementById('filter-type').value;
+                const categoryFilter = document.getElementById('filter-category').value;
+
+                let filteredTransactions = this.transactions;
+
+                if (typeFilter !== 'all') {
+                    filteredTransactions = filteredTransactions.filter(t => t.type === typeFilter);
+                }
+
+                if (categoryFilter !== 'all') {
+                    filteredTransactions = filteredTransactions.filter(t => t.category === categoryFilter);
+                }
+
+                this.renderTransactions(filteredTransactions);
+            }
+
+            initCharts() {
+                this.createCategoryChart();
+                this.createTrendChart();
+            }
+
+            createCategoryChart() {
+                const ctx = document.getElementById('categoryChart');
+                if (!ctx) return;
+                
+                const expenses = this.transactions.filter(t => t.type === 'expense');
+                const categoryData = {};
+
+                expenses.forEach(transaction => {
+                    if (categoryData[transaction.category]) {
+                        categoryData[transaction.category] += transaction.amount;
+                    } else {
+                        categoryData[transaction.category] = transaction.amount;
+                    }
+                });
+
+                const labels = Object.keys(categoryData);
+                const data = Object.values(categoryData);
+                const colors = [
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+                    '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF'
+                ];
+
+                if (this.charts.categoryChart) {
+                    this.charts.categoryChart.destroy();
+                }
+
+                if (labels.length === 0) {
+                    ctx.getContext('2d').clearRect(0, 0, ctx.width, ctx.height);
+                    return;
+                }
+
+                this.charts.categoryChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels.map(label => this.formatCategory(label)),
+                        datasets: [{
+                            data: data,
+                            backgroundColor: colors.slice(0, labels.length),
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 20,
+                                    usePointStyle: true
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            createTrendChart() {
+                const ctx = document.getElementById('trendChart');
+                if (!ctx) return;
+                
+                const monthlyData = {};
+                const currentDate = new Date();
+                
+                for (let i = 5; i >= 0; i--) {
+                    const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+                    const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
+                    monthlyData[monthKey] = { 
+                        income: 0, 
+                        expenses: 0, 
+                        label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) 
+                    };
+                }
+
+                this.transactions.forEach(transaction => {
+                    const date = new Date(transaction.date);
+                    const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
+                    
+                    if (monthlyData[monthKey]) {
+                        if (transaction.type === 'income') {
+                            monthlyData[monthKey].income += transaction.amount;
+                        } else {
+                            monthlyData[monthKey].expenses += transaction.amount;
+                        }
+                    }
+                });
+
+                const labels = Object.values(monthlyData).map(data => data.label);
+                const incomeData = Object.values(monthlyData).map(data => data.income);
+                const expenseData = Object.values(monthlyData).map(data => data.expenses);
+
+                if (this.charts.trendChart) {
+                    this.charts.trendChart.destroy();
+                }
+
+                this.charts.trendChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Income',
+                            data: incomeData,
+                            borderColor: '#28a745',
+                            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }, {
+                            label: 'Expenses',
+                            data: expenseData,
+                            borderColor: '#dc3545',
+                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return '$' + value.toLocaleString();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            updateCharts() {
+                this.createCategoryChart();
+                this.createTrendChart();
+            }
+
+            formatCurrency(amount) {
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD'
+                }).format(Math.abs(amount));
+            }
+
+            formatDate(dateString) {
+                return new Date(dateString).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            }
+
+            formatCategory(category) {
+                return category.charAt(0).toUpperCase() + category.slice(1);
+            }
+
+            showNotification(message, type = 'info') {
+                const notification = document.createElement('div');
+                notification.className = `notification ${type}`;
+                notification.textContent = message;
+                document.body.appendChild(notification);
+
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(100%)';
+                    setTimeout(() => {
+                        if (document.body.contains(notification)) {
+                            document.body.removeChild(notification);
+                        }
+                    }, 300);
+                }, 4000);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            window.financeTracker = new EnhancedFinanceTracker();
+        });
+    </script>
+</body>
+</html>
